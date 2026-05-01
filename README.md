@@ -99,3 +99,16 @@ Viktigt: se till att dina GHCR-packages är pullbara från klustret:
 
 - Antingen gör packages **Public**
 - Eller skapa en `imagePullSecret` i `greenops`-namespace och referera den i Deployments
+
+## Ingress (utan port-forward)
+
+Ingress finns i `k8s/50_ingress.yaml` och hanteras av ArgoCD.
+
+För att nå sidan via `http://greenops.local/` behöver du:
+
+1. Ha `ingress-nginx` installerat i klustret
+2. Lägga in i Windows hosts:
+
+```text
+127.0.0.1 greenops.local
+```

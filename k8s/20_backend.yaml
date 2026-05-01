@@ -24,8 +24,8 @@ spec:
     spec:
       containers:
         - name: backend
-          image: greenops-backend:local
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/arash00009/greenops-backend:main
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           envFrom:

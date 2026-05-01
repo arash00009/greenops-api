@@ -87,3 +87,15 @@ Det finns en GitHub Actions-workflow som bygger och pushar images till GitHub Co
 2. Gå till repo → **Settings → Actions → General** och säkerställ att Actions är tillåtet.
 3. Gå till repo → **Settings → Packages** (eller din GHCR package) och säkerställ att packages får användas.
 4. Pusha till `main` → workflow kör och images hamnar i GHCR.
+
+## Full GitOps (ArgoCD) + GHCR-images
+
+För att ArgoCD ska kunna återskapa allt utan lokala Docker builds använder manifests nu:
+
+- `ghcr.io/arash00009/greenops-backend:main`
+- `ghcr.io/arash00009/greenops-frontend:main`
+
+Viktigt: se till att dina GHCR-packages är pullbara från klustret:
+
+- Antingen gör packages **Public**
+- Eller skapa en `imagePullSecret` i `greenops`-namespace och referera den i Deployments

@@ -1,114 +1,302 @@
-# greenops-api
+# 🌿 GreenOps API
 
-GreenOps lokal three-tier (Kubernetes) med frontend + backend + postgres.
+> A production-ready three-tier application deployed on Kubernetes — featuring a static frontend, a Node.js/Express REST API backend, and a PostgreSQL database with persistent storage.
 
-Detta är en minimal three-tier enligt modellen i din Guestbook-rapport:
+[![CI](https://github.com/arash00009/greenops-api/actions/workflows/build-and-push-ghcr.yml/badge.svg)](https://github.com/arash00009/greenops-api/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-ready-blue?logo=kubernetes)](https://kubernetes.io/)
+[![Docker](https://img.shields.io/badge/Docker-containerized-blue?logo=docker)](https://www.docker.com/)
 
-- **Frontend**: Nginx som serverar statisk `index.html`/`styles.css` och proxyar `/api/*` till backend
-- **Backend**: Node/Express API som skriver leads till Postgres
-- **Database**: PostgreSQL med persistent storage + init-script
+---
 
-## Förkrav
+## 📋 Table of Contents
 
-- Docker Desktop (med Kubernetes **avstängt** om du kör `kind`)
-- `kubectl`
-- `kind` (rekommenderat) eller `minikube`
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Getting Started](#getting-started)
+- [API Reference](#api-reference)
+- [CI/CD Pipeline](#cicd-pipeline)
+- [GitOps with ArgoCD](#gitops-with-argocd)
+- [Ingress Setup](#ingress-setup)
+- [Troubleshooting](#troubleshooting)
+- [Project Structure](#project-structure)
 
-## Kör med kind (rekommenderat)
+---
 
-### 1) Skapa kluster
+## Overview
 
-```powershell
+**GreenOps API** is a minimal, cloud-native three-tier application built to demonstrate a complete Kubernetes deployment pipeline. It collects lead submissions via a frontend form, stores them in a PostgreSQL database, and exposes a RESTful API — all running inside a local Kubernetes cluster.
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│                  Kubernetes Cluster              │
+│                                                  │
+│  ┌────────────┐    ┌────────────┐    ┌────────┐  │
+│  │  Frontend  │───▶│  Backend   │───▶│  Postgres│ │
+│  │  (Nginx)   │    │ (Node/Express)  │  (DB)  │  │
+│  └────────────┘    └────────────┘    └────────┘  │
+│       :8081             /api/*        :5432       │
+└─────────────────────────────────────────────────┘
+```
+
+| Tier       | Technology          | Role                                           |
+|------------|---------------------|------------------------------------------------|
+| Frontend   | Nginx               | Serves static HTML/CSS and proxies `/api/*`    |
+| Backend    | Node.js + Express   | REST API — handles lead submissions to Postgres|
+| Database   | PostgreSQL          | Persistent storage with init script            |
+
+---
+
+## Prerequisites
+
+Ensure the following tools are installed before getting started:
+
+| Tool           | Description                                 | Required |
+|----------------|---------------------------------------------|----------|
+| Docker Desktop | Container runtime                           | ✅        |
+| `kubectl`      | Kubernetes CLI                              | ✅        |
+| `kind`         | Local Kubernetes cluster (recommended)      | ✅        |
+| `minikube`     | Alternative to kind                         | Optional |
+
+> **Note:** If using `kind`, make sure Kubernetes is **disabled** in Docker Desktop to avoid port conflicts.
+
+---
+
+## Getting Started
+
+### 1. Create a local Kubernetes cluster
+
+```bash
 kind create cluster --name greenops
 ```
 
-### 2) Bygg images lokalt
+### 2. Build Docker images locally
 
-```powershell
-docker build -t greenops-backend:local .\backend
-docker build -t greenops-frontend:local .\frontend
+```bash
+docker build -t greenops-backend:local ./backend
+docker build -t greenops-frontend:local ./frontend
 ```
 
-### 3) Ladda images in i kind
+### 3. Load images into the kind cluster
 
-```powershell
+```bash
 kind load docker-image greenops-backend:local --name greenops
 kind load docker-image greenops-frontend:local --name greenops
 ```
 
-### 4) Deploya till Kubernetes
+### 4. Deploy all Kubernetes manifests
 
-```powershell
-kubectl apply -f .\k8s\00_namespace.yaml
-kubectl apply -f .\k8s\10_postgres.yaml
-kubectl apply -f .\k8s\20_backend.yaml
-kubectl apply -f .\k8s\30_frontend.yaml
-kubectl apply -f .\k8s\40_frontend_proxy.yaml
+```bash
+kubectl apply -f ./k8s/00_namespace.yaml
+kubectl apply -f ./k8s/10_postgres.yaml
+kubectl apply -f ./k8s/20_backend.yaml
+kubectl apply -f ./k8s/30_frontend.yaml
+kubectl apply -f ./k8s/40_frontend_proxy.yaml
 ```
 
-### 5) Öppna sidan
+### 5. Access the application
 
-Frontend-servicen exponerar port **8081** internt i klustret. Kör port-forward:
+Forward the frontend service port to your local machine:
 
-```powershell
+```bash
 kubectl -n greenops port-forward svc/greenops-frontend 8081:8081
 ```
 
-Öppna sen `http://localhost:8081`.
+Then open your browser at [http://localhost:8081](http://localhost:8081).
 
-Testa API:
+---
 
-```powershell
-curl http://localhost:8081/healthz
-curl -X POST http://localhost:8081/api/leads -H "content-type: application/json" -d "{\"email\":\"test@example.com\",\"name\":\"Arash\",\"message\":\"hej\"}"
+## API Reference
+
+Base URL: `http://localhost:8081`
+
+### Health Check
+
+```http
+GET /healthz
 ```
 
-## Felsökning (snabbt)
-
-```powershell
-kubectl -n greenops get pods
-kubectl -n greenops logs deploy/greenops-backend
-kubectl -n greenops logs deploy/greenops-frontend
-kubectl -n greenops logs deploy/greenops-postgres
+**Response:**
+```json
+{ "status": "ok" }
 ```
 
-## GitHub + CI (som i PDF-exemplet)
+---
 
-Det finns en GitHub Actions-workflow som bygger och pushar images till GitHub Container Registry (GHCR):
+### Submit a Lead
 
-- `/.github/workflows/build-and-push-ghcr.yml`
-- Pushar:
-  - `ghcr.io/<owner>/greenops-backend:main` och `:sha-<commit>`
-  - `ghcr.io/<owner>/greenops-frontend:main` och `:sha-<commit>`
+```http
+POST /api/leads
+Content-Type: application/json
+```
 
-### Steg
+**Request Body:**
 
-1. Skapa ett GitHub-repo (t.ex. `greenops-local-3tier`) och pusha innehållet i denna mapp.
-2. Gå till repo → **Settings → Actions → General** och säkerställ att Actions är tillåtet.
-3. Gå till repo → **Settings → Packages** (eller din GHCR package) och säkerställ att packages får användas.
-4. Pusha till `main` → workflow kör och images hamnar i GHCR.
+```json
+{
+  "name": "Arash",
+  "email": "test@example.com",
+  "message": "Hello!"
+}
+```
 
-## Full GitOps (ArgoCD) + GHCR-images
+**Example with curl:**
 
-För att ArgoCD ska kunna återskapa allt utan lokala Docker builds använder manifests nu:
+```bash
+curl -X POST http://localhost:8081/api/leads \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","name":"Arash","message":"Hello!"}'
+```
+
+---
+
+## CI/CD Pipeline
+
+The repository includes a GitHub Actions workflow that automatically builds and pushes Docker images to **GitHub Container Registry (GHCR)** on every push to `main`.
+
+**Workflow file:** `.github/workflows/build-and-push-ghcr.yml`
+
+**Published images:**
+
+| Image | Tags |
+|-------|------|
+| `ghcr.io/arash00009/greenops-backend` | `main`, `sha-<commit>` |
+| `ghcr.io/arash00009/greenops-frontend` | `main`, `sha-<commit>` |
+
+### Setup Steps
+
+1. Push the repository to GitHub.
+2. Navigate to **Settings → Actions → General** and ensure Actions are allowed.
+3. Navigate to **Settings → Packages** and ensure packages are enabled.
+4. Push to `main` — the workflow will trigger and publish images to GHCR.
+
+---
+
+## GitOps with ArgoCD
+
+For full GitOps automation, the Kubernetes manifests reference GHCR images directly — no local Docker builds required:
 
 - `ghcr.io/arash00009/greenops-backend:main`
 - `ghcr.io/arash00009/greenops-frontend:main`
 
-Viktigt: se till att dina GHCR-packages är pullbara från klustret:
+### Making images accessible from the cluster
 
-- Antingen gör packages **Public**
-- Eller skapa en `imagePullSecret` i `greenops`-namespace och referera den i Deployments
+Choose one of the following options:
 
-## Ingress (utan port-forward)
+**Option A — Make packages public:**
+Go to your GHCR package settings and set visibility to **Public**.
 
-Ingress finns i `k8s/50_ingress.yaml` och hanteras av ArgoCD.
+**Option B — Use an image pull secret:**
 
-För att nå sidan via `http://greenops.local/` behöver du:
+```bash
+kubectl create secret docker-registry ghcr-secret \
+  --docker-server=ghcr.io \
+  --docker-username=<your-github-username> \
+  --docker-password=<your-github-pat> \
+  -n greenops
+```
 
-1. Ha `ingress-nginx` installerat i klustret
-2. Lägga in i Windows hosts:
+Then reference `ghcr-secret` in each Deployment under `spec.template.spec.imagePullSecrets`.
 
-```text
+---
+
+## Ingress Setup
+
+An Ingress resource is available at `k8s/50_ingress.yaml` for accessing the app via a hostname instead of port-forward.
+
+### Requirements
+
+1. `ingress-nginx` must be installed in the cluster.
+2. Add the following entry to your hosts file:
+
+**Windows** (`C:\Windows\System32\drivers\etc\hosts`):
+```
 127.0.0.1 greenops.local
 ```
+
+**macOS / Linux** (`/etc/hosts`):
+```
+127.0.0.1 greenops.local
+```
+
+The application will then be reachable at [http://greenops.local](http://greenops.local).
+
+---
+
+## Troubleshooting
+
+### Check pod status
+
+```bash
+kubectl -n greenops get pods
+```
+
+### View logs per service
+
+```bash
+# Backend
+kubectl -n greenops logs deploy/greenops-backend
+
+# Frontend
+kubectl -n greenops logs deploy/greenops-frontend
+
+# Database
+kubectl -n greenops logs deploy/greenops-postgres
+```
+
+### Describe a failing pod
+
+```bash
+kubectl -n greenops describe pod <pod-name>
+```
+
+### Common issues
+
+| Symptom | Likely Cause | Fix |
+|---|---|---|
+| `ImagePullBackOff` | GHCR image not accessible | Make package public or add `imagePullSecret` |
+| Frontend returns 502 | Backend not ready | Wait for backend pod to reach `Running` state |
+| Postgres crash loop | PVC not provisioned | Verify storage class is available in cluster |
+
+---
+
+## Project Structure
+
+```
+greenops-api/
+├── .github/
+│   └── workflows/
+│       └── build-and-push-ghcr.yml   # CI/CD pipeline
+├── backend/
+│   ├── Dockerfile
+│   └── ...                           # Node.js/Express API
+├── frontend/
+│   ├── Dockerfile
+│   └── ...                           # Nginx + static HTML/CSS
+├── k8s/
+│   ├── 00_namespace.yaml
+│   ├── 10_postgres.yaml
+│   ├── 20_backend.yaml
+│   ├── 30_frontend.yaml
+│   ├── 40_frontend_proxy.yaml
+│   └── 50_ingress.yaml
+├── .gitignore
+└── README.md
+```
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+<div align="center">
+  <sub>Built with ❤️ by <a href="https://github.com/arash00009">arash00009</a></sub>
+</div>

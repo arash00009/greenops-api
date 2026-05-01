@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: greenops-backend-config
+  namespace: greenops
+data:
+  PORT: "8080"
+  DATABASE_URL: "postgres://greenops:greenops@greenops-postgres.greenops.svc.cluster.local:5432/greenops"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: greenops-backend
+  namespace: greenops
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: greenops-backend
+  template:
+    metadata:
+      labels:
+        app: greenops-backend
+    spec:
+      containers:
+        - name: backend
+          image: greenops-backend:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: greenops-backend-config
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: greenops-backend
+  namespace: greenops
+spec:
+  selector:
+    app: greenops-backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+

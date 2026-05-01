@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: greenops-postgres-secret
+  namespace: greenops
+type: Opaque
+stringData:
+  POSTGRES_DB: greenops
+  POSTGRES_USER: greenops
+  POSTGRES_PASSWORD: greenops
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: greenops-postgres-init
+  namespace: greenops
+data:
+  001_init.sql: |
+    create table if not exists leads (
+      id bigserial primary key,
+      created_at timestamptz not null default now(),
+      name text,
+      email text not null,
+      message text
+    );
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: greenops-postgres-pvc
+  namespace: greenops
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: greenops-postgres
+  namespace: greenops
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: greenops-postgres
+  template:
+    metadata:
+      labels:
+        app: greenops-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: greenops-postgres-secret
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -lc
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: greenops-postgres-pvc
+        - name: init
+          configMap:
+            name: greenops-postgres-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: greenops-postgres
+  namespace: greenops
+spec:
+  selector:
+    app: greenops-postgres
+  ports:
+    - name: tcp
+      port: 5432
+      targetPort: 5432
+
